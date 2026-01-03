@@ -1,0 +1,12 @@
+{
+    "name": "campus-functions",
+    "version": "1.0.0",
+    "main": "index.js",
+    "dependencies": {
+        "@google-cloud/firestore": "^7.0.0",
+        "googleapis": "^126.0.0"
+    },
+    "engines": {
+        "node": "20"
+    }
+}
