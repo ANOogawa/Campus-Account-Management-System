@@ -1,18 +1,16 @@
 
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
-import { Timestamp, FieldValue } from 'firebase-admin/firestore';
-import { headers } from 'next/headers';
-import { verifyIapToken, getCurrentUser } from '@/lib/auth';
-import { appendLog } from '@/lib/sheets';
+import { Timestamp } from 'firebase-admin/firestore';
+import { getSessionEmail, getCurrentUser } from '@/lib/auth';
 import { GuestAccount } from '@/types/firestore';
+import { logSystemAction } from '@/lib/logs';
+import { validateGuestAccount, validateEmail } from '@/lib/validation';
 
 export async function POST(request: Request) {
     try {
         // 1. Auth Check
-        const headersList = await headers();
-        const iapJwt = headersList.get("x-goog-iap-jwt-assertion") || "";
-        const email = await verifyIapToken(iapJwt);
+        const email = await getSessionEmail();
 
         if (!email) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -44,11 +42,6 @@ export async function POST(request: Request) {
         let updateData: any = {
             last_updated_date: Timestamp.now()
         };
-        let logSheetName = '';
-        let logValues: string[] = [];
-
-        // Current Time
-        const nowStr = new Date().toLocaleString('ja-JP');
 
         switch (action) {
             case 'EXTEND':
@@ -63,12 +56,31 @@ export async function POST(request: Request) {
                 }
 
                 updateData.expiration_date = Timestamp.fromDate(newDate);
-
-                logSheetName = '延長ログ';
-                logValues = [nowStr, currentUser.id, accountId, newDate.toLocaleDateString('ja-JP')];
+                
+                // Firestoreにログ保存
+                await logSystemAction(
+                    'extend',
+                    currentUser.id,
+                    `${currentUser.last_name} ${currentUser.first_name}`,
+                    {
+                        expiration_date: newDate.toISOString()
+                    },
+                    accountId
+                );
                 break;
 
             case 'EDIT':
+                // 入力値の長さチェック
+                const editValidationError = validateGuestAccount({
+                    last_name: data.last_name,
+                    first_name: data.first_name,
+                    department: data.department,
+                    usage_purpose: data.usage_purpose
+                });
+                if (editValidationError) {
+                    return NextResponse.json({ error: editValidationError.message }, { status: 400 });
+                }
+
                 // Edit Name, Dept, Purpose
                 // No specific log sheet for "Edit Info" in spec? 
                 // Spec says: "Edit Info" -> Write to guest_accounts.
@@ -84,22 +96,36 @@ export async function POST(request: Request) {
 
             case 'DELEGATE':
                 // Delegate approver
-                // Check if new approver exists and is staff
+                // メールアドレスの形式と長さチェック
                 const newApproverEmail = data.new_approver_id;
+                const emailValidationError = validateEmail(newApproverEmail, '委譲先承認者メールアドレス');
+                if (emailValidationError) {
+                    return NextResponse.json({ error: emailValidationError.message }, { status: 400 });
+                }
+
+                // Check if new approver exists and is staff
                 const newApproverRef = await db.collection('user_master').doc(newApproverEmail).get();
                 if (!newApproverRef.exists) {
-                    return NextResponse.json({ error: 'New approver not found' }, { status: 400 });
+                    return NextResponse.json({ error: '指定されたメールアドレスのユーザーが見つかりませんでした' }, { status: 400 });
                 }
                 const newApproverData = newApproverRef.data();
                 if (newApproverData?.employment_status !== '正職員') {
-                    return NextResponse.json({ error: 'New approver is not staff' }, { status: 400 });
+                    return NextResponse.json({ error: '指定されたユーザーは正職員ではありません。正職員のみ承認者として指定できます。' }, { status: 400 });
                 }
 
                 updateData.approver_id = newApproverEmail;
 
-                // Log: 日時, 作業者, 対象アドレス, 委譲先承認者
-                logSheetName = '承認者変更ログ';
-                logValues = [nowStr, currentUser.id, accountId, newApproverEmail];
+                // Firestoreにログ保存
+                await logSystemAction(
+                    'delegate',
+                    currentUser.id,
+                    `${currentUser.last_name} ${currentUser.first_name}`,
+                    {
+                        old_approver_id: accountData.approver_id,
+                        new_approver_id: newApproverEmail
+                    },
+                    accountId
+                );
 
                 // Send Email (Mock)
                 console.log(`Email sent to ${currentUser.id} and ${newApproverEmail}`);
@@ -115,10 +141,96 @@ export async function POST(request: Request) {
                 updateData.status = '利用中';
                 updateData.expiration_date = accountData.requested_expiration_date;
                 updateData.requested_expiration_date = null;
+                
+                // Firestoreにログ保存
+                await logSystemAction(
+                    'extend',
+                    currentUser.id,
+                    `${currentUser.last_name} ${currentUser.first_name}`,
+                    {
+                        expiration_date: accountData.requested_expiration_date.toDate().toISOString(),
+                        approved: true
+                    },
+                    accountId
+                );
+                break;
 
-                // Log: Same as EXTEND? Spec says "Extension Log"
-                logSheetName = '延長ログ';
-                logValues = [nowStr, currentUser.id, accountId, accountData.requested_expiration_date.toDate().toLocaleDateString('ja-JP')];
+            case 'SUSPEND':
+                // 一時停止処理（休職など）
+                // 停止中・アーカイブ・削除のアカウントは停止できない
+                if (accountData.status === '停止中' || accountData.status === 'アーカイブ' || accountData.status === '削除') {
+                    return NextResponse.json({ error: '既に停止またはアーカイブされているアカウントです' }, { status: 400 });
+                }
+
+                updateData.status = '停止中';
+                
+                // Firestoreにログ保存
+                await logSystemAction(
+                    'suspend',
+                    currentUser.id,
+                    `${currentUser.last_name} ${currentUser.first_name}`,
+                    {
+                        previous_status: accountData.status
+                    },
+                    accountId
+                );
+                break;
+
+            case 'ARCHIVE':
+                // 削除処理（退職など）- アーカイブとして記録
+                // 停止中・アーカイブ・削除のアカウントはアーカイブできない
+                if (accountData.status === 'アーカイブ' || accountData.status === '削除') {
+                    return NextResponse.json({ error: '既にアーカイブまたは削除されているアカウントです' }, { status: 400 });
+                }
+
+                updateData.status = 'アーカイブ';
+                updateData.archived_at = Timestamp.now();
+                
+                // Firestoreにログ保存
+                await logSystemAction(
+                    'archive',
+                    currentUser.id,
+                    `${currentUser.last_name} ${currentUser.first_name}`,
+                    {
+                        previous_status: accountData.status
+                    },
+                    accountId
+                );
+                break;
+
+            case 'RESTORE':
+                // 復旧処理
+                // 停止中・アーカイブのアカウントのみ復旧可能
+                if (accountData.status !== '停止中' && accountData.status !== 'アーカイブ') {
+                    return NextResponse.json({ error: '停止中またはアーカイブのアカウントのみ復旧できます' }, { status: 400 });
+                }
+
+                // 利用期限を確認して適切なステータスに復旧
+                const expirationDate = accountData.expiration_date.toDate();
+                const now = new Date();
+                
+                if (expirationDate < now) {
+                    // 利用期限が過ぎている場合は「申請中」に戻す
+                    updateData.status = '申請中';
+                } else {
+                    // 利用期限が有効な場合は「利用中」に戻す
+                    updateData.status = '利用中';
+                }
+                
+                // アーカイブ日時をクリア
+                updateData.archived_at = null;
+                
+                // Firestoreにログ保存
+                await logSystemAction(
+                    'restore',
+                    currentUser.id,
+                    `${currentUser.last_name} ${currentUser.first_name}`,
+                    {
+                        previous_status: accountData.status,
+                        new_status: updateData.status
+                    },
+                    accountId
+                );
                 break;
 
             default:
@@ -126,10 +238,6 @@ export async function POST(request: Request) {
         }
 
         await accountRef.update(updateData);
-
-        if (logSheetName && logValues.length > 0) {
-            await appendLog(logSheetName, logValues);
-        }
 
         return NextResponse.json({ success: true });
 

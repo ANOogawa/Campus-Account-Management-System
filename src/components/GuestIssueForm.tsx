@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { UserMaster as UserProfile } from '@/types/firestore';
 import SuccessModal from './SuccessModal';
+import { FIELD_MAX_LENGTHS, validateGuestAccount } from '@/lib/validation';
 
 
 interface GuestIssueFormProps {
@@ -63,6 +64,22 @@ export default function GuestIssueForm({ currentUser }: GuestIssueFormProps) {
         setError(null);
         setResults(null);
 
+        // フロントエンドバリデーション
+        for (const guest of guests) {
+            const validationError = validateGuestAccount({
+                last_name: guest.last_name,
+                first_name: guest.first_name,
+                department: guest.department,
+                usage_purpose: guest.usage_purpose,
+                approver_email: guest.approver_email
+            });
+            if (validationError) {
+                setError(validationError.message);
+                setLoading(false);
+                return;
+            }
+        }
+
         try {
             const token = localStorage.getItem('iap_token') || ''; // Fallback for dev
             const res = await fetch('/api/issue', {
@@ -108,15 +125,15 @@ export default function GuestIssueForm({ currentUser }: GuestIssueFormProps) {
             />
 
             {error && (
-                <div className="bg-red-50 text-red-700 p-4 rounded mb-4">
+                <div className="bg-red-900 text-red-200 p-4 rounded-xl mb-4 border border-red-700">
                     {error}
                 </div>
             )}
 
             {results && (
-                <div className="bg-green-50 p-4 rounded mb-4">
-                    <h3 className="font-bold text-green-800 mb-2">発行結果:</h3>
-                    <ul className="list-disc pl-5 text-green-700 text-sm">
+                <div className="bg-green-900 p-4 rounded-xl mb-4 border border-green-700">
+                    <h3 className="font-bold text-green-200 mb-2">発行結果:</h3>
+                    <ul className="list-disc pl-5 text-green-300 text-sm">
                         {results.map((r, i) => (
                             <li key={i}>{r.id} ({r.name}) - {r.status}</li>
                         ))}
@@ -126,14 +143,14 @@ export default function GuestIssueForm({ currentUser }: GuestIssueFormProps) {
 
             <form onSubmit={handleSubmit} className="space-y-6">
                 {guests.map((guest, index) => (
-                    <div key={index} className="bg-white p-6 rounded shadow border border-gray-200 relative">
-                        <h3 className="font-bold mb-4 text-gray-700">アカウント #{index + 1}</h3>
+                    <div key={index} className="bg-gray-800 p-6 rounded-2xl shadow-md border border-gray-700 relative">
+                        <h3 className="font-bold mb-4 text-gray-100">アカウント #{index + 1}</h3>
 
                         {guests.length > 1 && (
                             <button
                                 type="button"
                                 onClick={() => removeGuest(index)}
-                                className="absolute top-4 right-4 text-red-500 hover:text-red-700 text-sm"
+                                className="absolute top-4 right-4 text-red-400 hover:text-red-300 text-sm font-medium transition-colors"
                             >
                                 削除
                             </button>
@@ -141,61 +158,66 @@ export default function GuestIssueForm({ currentUser }: GuestIssueFormProps) {
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700">姓</label>
+                                <label className="block text-sm font-medium text-gray-300">姓</label>
                                 <input
                                     type="text"
                                     required
-                                    className="mt-1 block w-full border border-gray-300 rounded px-3 py-2"
+                                    maxLength={FIELD_MAX_LENGTHS.last_name}
+                                    className="mt-1 block w-full border border-gray-600 bg-gray-700 rounded-xl px-3 py-2.5 text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                     value={guest.last_name}
                                     onChange={(e) => handleChange(index, 'last_name', e.target.value)}
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700">名</label>
+                                <label className="block text-sm font-medium text-gray-300">名</label>
                                 <input
                                     type="text"
                                     required
-                                    className="mt-1 block w-full border border-gray-300 rounded px-3 py-2"
+                                    maxLength={FIELD_MAX_LENGTHS.first_name}
+                                    className="mt-1 block w-full border border-gray-600 bg-gray-700 rounded-xl px-3 py-2.5 text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                     value={guest.first_name}
                                     onChange={(e) => handleChange(index, 'first_name', e.target.value)}
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700">所属 (利用者)</label>
+                                <label className="block text-sm font-medium text-gray-300">所属 (利用者)</label>
                                 <input
                                     type="text"
                                     required
-                                    className="mt-1 block w-full border border-gray-300 rounded px-3 py-2"
+                                    maxLength={FIELD_MAX_LENGTHS.department}
+                                    className="mt-1 block w-full border border-gray-600 bg-gray-700 rounded-xl px-3 py-2.5 text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                     value={guest.department}
                                     onChange={(e) => handleChange(index, 'department', e.target.value)}
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700">用途</label>
+                                <label className="block text-sm font-medium text-gray-300">用途</label>
                                 <input
                                     type="text"
                                     required
-                                    className="mt-1 block w-full border border-gray-300 rounded px-3 py-2"
+                                    maxLength={FIELD_MAX_LENGTHS.usage_purpose}
+                                    className="mt-1 block w-full border border-gray-600 bg-gray-700 rounded-xl px-3 py-2.5 text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                     value={guest.usage_purpose}
                                     onChange={(e) => handleChange(index, 'usage_purpose', e.target.value)}
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700">承認者メールアドレス</label>
+                                <label className="block text-sm font-medium text-gray-300">承認者メールアドレス</label>
                                 <input
                                     type="email"
                                     required
-                                    className="mt-1 block w-full border border-gray-300 rounded px-3 py-2"
+                                    maxLength={FIELD_MAX_LENGTHS.email}
+                                    className="mt-1 block w-full border border-gray-600 bg-gray-700 rounded-xl px-3 py-2.5 text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                     value={guest.approver_email}
                                     onChange={(e) => handleChange(index, 'approver_email', e.target.value)}
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700">利用期限 (最大3ヶ月)</label>
+                                <label className="block text-sm font-medium text-gray-300">利用期限 (最大3ヶ月)</label>
                                 <input
                                     type="date"
                                     required
-                                    className="mt-1 block w-full border border-gray-300 rounded px-3 py-2"
+                                    className="mt-1 block w-full border border-gray-600 bg-gray-700 rounded-xl px-3 py-2.5 text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                     value={guest.expiration_date}
                                     onChange={(e) => handleChange(index, 'expiration_date', e.target.value)}
                                     max={new Date(new Date().setMonth(new Date().getMonth() + 3)).toISOString().split('T')[0]}
@@ -209,14 +231,14 @@ export default function GuestIssueForm({ currentUser }: GuestIssueFormProps) {
                     <button
                         type="button"
                         onClick={addGuest}
-                        className="bg-gray-200 text-gray-800 px-4 py-2 rounded hover:bg-gray-300"
+                        className="bg-gray-600 text-gray-200 px-4 py-2.5 rounded-xl hover:bg-gray-500 transition-all duration-200 font-medium shadow-sm"
                     >
                         ＋ 一人追加
                     </button>
                     <button
                         type="submit"
                         disabled={loading}
-                        className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+                        className="bg-blue-600 text-white px-6 py-2.5 rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-all duration-200 font-semibold shadow-md"
                     >
                         {loading ? '発行中...' : '発行する'}
                     </button>

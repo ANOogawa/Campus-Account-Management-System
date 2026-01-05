@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
-import { Inter } from "next/font/google"; // Using a nice font // Note: create-next-app uses Geist mostly now, but user asked for simple
+import { Inter } from "next/font/google";
+import { redirect } from "next/navigation";
 import "./globals.css";
 import Sidebar from "@/components/Sidebar";
-import { getCurrentUser, verifyIapToken } from "@/lib/auth";
+import { getCurrentUser, getSessionEmail, UserProfileSerializable } from "@/lib/auth";
 import { hasApprovals } from "@/lib/db_utils";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -18,30 +18,44 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // 1. Get headers to extract IAP token
-  const headersList = await headers();
-  const iapJwt = headersList.get("x-goog-iap-jwt-assertion") || "";
+  // セッションからメールアドレスを取得
+  const email = await getSessionEmail();
 
-  // 2. Verify Token -> Get Email
-  const email = await verifyIapToken(iapJwt);
-
-  // 3. Get User Profile
-  // IF email is null, user is not authenticated via IAP (or dev mock failed)
+  // ユーザー情報を取得
   const user = email ? await getCurrentUser(email) : null;
 
-  // 4. Check for approvals if user is staff
+  // 認証済みだがuser_masterに存在しない場合
+  const isAuthenticatedButNotInMaster = email !== null && user === null;
+
+  // 承認権限チェック
   const userHasApprovals = (user && user.employment_status === '正職員' && email)
     ? await hasApprovals(email)
     : false;
 
+  // userオブジェクトからFirestore Timestamp（updated_at）とpassword_hashを除外してシリアライズ可能にする
+  // Sidebarコンポーネントで使用されるフィールドのみを抽出
+  const serializedUser: UserProfileSerializable | null = user ? {
+    id: user.id,
+    last_name: user.last_name,
+    first_name: user.first_name,
+    department: user.department,
+    employment_status: user.employment_status,
+    is_admin: user.is_admin
+  } : null;
+
   return (
     <html lang="ja">
-      <body className={`${inter.className} bg-gray-50 min-h-screen flex text-gray-900`}>
+      <body className={`${inter.className} bg-gray-900 min-h-screen flex text-gray-100`}>
         {/* Sidebar */}
-        <Sidebar user={user} hasApprovals={userHasApprovals} />
+        <Sidebar 
+          user={serializedUser} 
+          hasApprovals={userHasApprovals} 
+          isAuthenticatedButNotInMaster={isAuthenticatedButNotInMaster} 
+          authenticatedEmail={email || undefined} 
+        />
 
         {/* Main Content */}
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto bg-gray-900 ml-64">
           {children}
         </main>
       </body>

@@ -1,20 +1,15 @@
 
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
-import { Timestamp, FieldValue } from 'firebase-admin/firestore';
-import { headers } from 'next/headers';
-import { verifyIapToken, getCurrentUser } from '@/lib/auth';
-import { google } from 'googleapis';
-import { appendLog } from '@/lib/sheets';
-
-const SHEET_ID = '1WDJvweOGdqOkZjkR6yyMYtnRxaJUvxrF1TFHkzLpmAQ';
+import { Timestamp } from 'firebase-admin/firestore';
+import { getSessionEmail, getCurrentUser } from '@/lib/auth';
+import { logSystemAction } from '@/lib/logs';
+import { validateGuestAccount } from '@/lib/validation';
 
 export async function POST(request: Request) {
     try {
-        // 1. Auth Check (omitted context)
-        const headersList = await headers();
-        const iapJwt = headersList.get("x-goog-iap-jwt-assertion") || "";
-        const email = await verifyIapToken(iapJwt);
+        // 1. Auth Check
+        const email = await getSessionEmail();
 
         if (!email) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -44,6 +39,18 @@ export async function POST(request: Request) {
             const newGuestsData = [];
 
             for (const guest of guests) {
+                // 入力値の長さチェック
+                const validationError = validateGuestAccount({
+                    last_name: guest.last_name,
+                    first_name: guest.first_name,
+                    department: guest.department,
+                    usage_purpose: guest.usage_purpose,
+                    approver_email: guest.approver_email
+                });
+                if (validationError) {
+                    throw new Error(validationError.message);
+                }
+
                 // Validation: Check usage limit (3 months)
                 const expDate = new Date(guest.expiration_date);
                 const limitDate = new Date();
@@ -87,28 +94,27 @@ export async function POST(request: Request) {
         });
 
         // 3. Post-transaction actions
-        const logsToAppend = [];
-
         // We can do this in parallel or serial
         for (const guest of result) { // result is the returned array from transaction
             // Create Admin Account (Mocked/Commented)
             // await createGoogleAccount(guest);
 
-            // Log Data: `日時`, `作業者`, `対象アドレス`, `姓`, `名`, `所属`, `承認者`, `用途`, `利用期限`
-            const logRow = [
-                new Date().toLocaleString('ja-JP'),
+            // Firestoreにログ保存
+            await logSystemAction(
+                'issue',
                 currentUser.id,
-                guest.id,
-                guest.last_name,
-                guest.first_name,
-                guest.department,
-                guest.approver_id,
-                guest.usage_purpose,
-                guest.expiration_date.toDate().toLocaleDateString('ja-JP')
-            ];
-
-            // Fire and forget or await? Safer to await to ensure log exists.
-            await appendLog('発行ログ', logRow);
+                `${currentUser.last_name} ${currentUser.first_name}`,
+                {
+                    target_account_id: guest.id,
+                    last_name: guest.last_name,
+                    first_name: guest.first_name,
+                    department: guest.department,
+                    approver_id: guest.approver_id,
+                    usage_purpose: guest.usage_purpose,
+                    expiration_date: guest.expiration_date.toDate().toISOString()
+                },
+                guest.id
+            );
         }
 
         return NextResponse.json({ success: true, count: result.length });

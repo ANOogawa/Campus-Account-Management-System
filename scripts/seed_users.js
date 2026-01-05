@@ -10,14 +10,22 @@ async function seed() {
         ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY)
         : undefined;
 
-    if (!serviceAccount && !process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-        console.error("Please set GOOGLE_APPLICATION_CREDENTIALS or FIREBASE_SERVICE_ACCOUNT_KEY");
-        process.exit(1);
+    // Initialize Firebase Admin with available credentials
+    if (serviceAccount) {
+        initializeApp({
+            credential: cert(serviceAccount)
+        });
+    } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+        initializeApp();
+    } else {
+        // Try to use Application Default Credentials (ADC)
+        try {
+            initializeApp();
+        } catch (error) {
+            console.error("Please set GOOGLE_APPLICATION_CREDENTIALS or FIREBASE_SERVICE_ACCOUNT_KEY, or run 'gcloud auth application-default login'");
+            process.exit(1);
+        }
     }
-
-    initializeApp({
-        credential: serviceAccount ? cert(serviceAccount) : undefined
-    });
 
     const db = getFirestore();
     const batch = db.batch();
@@ -46,6 +54,14 @@ async function seed() {
             department: "外部パートナー",
             employment_status: "ゲスト",
             is_admin: false
+        },
+        {
+            id: "ogawa@ogw3.com",
+            last_name: "小川",
+            first_name: "テスト",
+            department: "開発部",
+            employment_status: "正職員",
+            is_admin: true
         }
     ];
 

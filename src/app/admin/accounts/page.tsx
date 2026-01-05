@@ -1,17 +1,20 @@
 
-import { headers } from "next/headers";
-import { getCurrentUser, verifyIapToken } from "@/lib/auth";
+import { getCurrentUser, getSessionEmail } from "@/lib/auth";
 import { getAllAccounts } from "@/lib/db_guests";
 import ManagementTable, { GuestAccountSerializable } from "@/components/ManagementTable";
+import { redirect } from "next/navigation";
 
 export default async function AdminAccountsPage() {
-    const headersList = await headers();
-    const iapJwt = headersList.get("x-goog-iap-jwt-assertion") || "";
-    const email = await verifyIapToken(iapJwt);
-    const user = email ? await getCurrentUser(email) : null;
+    const email = await getSessionEmail();
+    
+    if (!email) {
+        redirect('/login');
+    }
+
+    const user = await getCurrentUser(email);
 
     if (!user || !user.is_admin) {
-        return <div className="p-8">管理者権限がありません</div>;
+        return <div className="p-8 text-gray-300">管理者権限がありません</div>;
     }
 
     // Fetch ALL accounts
@@ -23,13 +26,14 @@ export default async function AdminAccountsPage() {
         expiration_date: acc.expiration_date.toDate().toISOString(),
         requested_expiration_date: acc.requested_expiration_date ? acc.requested_expiration_date.toDate().toISOString() : null,
         last_updated_date: acc.last_updated_date.toDate().toISOString(),
-        created_at: acc.created_at ? acc.created_at.toDate().toISOString() : undefined
+        created_at: acc.created_at ? acc.created_at.toDate().toISOString() : undefined,
+        archived_at: acc.archived_at ? acc.archived_at.toDate().toISOString() : undefined
     }));
 
     return (
         <div className="p-8">
-            <h1 className="text-2xl font-bold mb-4">全アカウント一覧 (管理者)</h1>
-            <p className="mb-6 text-gray-600">
+            <h1 className="text-2xl font-bold mb-4 text-white bg-slate-800 px-6 py-4 rounded-2xl shadow-lg">ゲストアカウント管理</h1>
+            <p className="mb-6 text-gray-300 font-medium">
                 システムに登録されているすべてのゲストアカウントを表示しています。
             </p>
             {/* Show Approver column for admins */}

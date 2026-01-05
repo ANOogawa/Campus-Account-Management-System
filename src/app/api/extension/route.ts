@@ -2,17 +2,14 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { Timestamp } from 'firebase-admin/firestore';
-import { headers } from 'next/headers';
-import { verifyIapToken, getCurrentUser } from '@/lib/auth';
-import { appendLog } from '@/lib/sheets';
+import { getSessionEmail, getCurrentUser } from '@/lib/auth';
 import { GuestAccount } from '@/types/firestore';
+import { logSystemAction } from '@/lib/logs';
 
 export async function POST(request: Request) {
     try {
         // 1. Auth Check
-        const headersList = await headers();
-        const iapJwt = headersList.get("x-goog-iap-jwt-assertion") || "";
-        const email = await verifyIapToken(iapJwt);
+        const email = await getSessionEmail();
 
         if (!email) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -52,13 +49,18 @@ export async function POST(request: Request) {
             last_updated_date: Timestamp.now()
         });
 
-        // Log to Sheet
-        // Sheet: `延長申請ログ`
-        // Columns: `日時`, `作業者`, `希望利用期限`
-        const nowStr = new Date().toLocaleString('ja-JP');
-        const reqDateStr = new Date(requested_date).toLocaleDateString('ja-JP');
-
-        await appendLog('延長申請ログ', [nowStr, email, reqDateStr]);
+        // Firestoreにログ保存
+        if (currentUser) {
+            await logSystemAction(
+                'extension_request',
+                email,
+                `${currentUser.last_name} ${currentUser.first_name}`,
+                {
+                    requested_date: reqDate.toISOString()
+                },
+                email
+            );
+        }
 
         return NextResponse.json({ success: true });
 
