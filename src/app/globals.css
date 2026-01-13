@@ -26,6 +26,19 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* スマホでのビューポート高さの調整 */
+@supports (height: 100dvh) {
+  .min-h-screen {
+    min-height: 100dvh;
+  }
+  .max-h-screen {
+    max-height: 100dvh;
+  }
+  .h-screen {
+    height: 100dvh;
+  }
+}
+
 /* Next.js開発モードインジケーターを非表示 */
 #__next-build-watcher,
 [data-nextjs-toast],

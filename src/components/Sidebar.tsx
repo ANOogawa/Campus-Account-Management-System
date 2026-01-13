@@ -56,17 +56,17 @@ export default function Sidebar({ user, hasApprovals, isAuthenticatedButNotInMas
                         onClick={handleToggle}
                     />
                 )}
-                <aside className={`fixed left-0 top-0 w-64 bg-slate-800 text-white p-6 flex flex-col shadow-xl border-r border-gray-700 z-50 h-screen transform transition-transform duration-300 ease-in-out ${
+                <aside className={`fixed left-0 top-0 w-64 bg-slate-800 text-white p-6 flex flex-col shadow-xl border-r border-gray-700 z-50 min-h-screen max-h-screen overflow-y-auto transform transition-transform duration-300 ease-in-out ${
                     isOpen ? 'translate-x-0' : '-translate-x-full'
                 } md:translate-x-0`}>
-                    <div className="mb-6">
+                    <div className="mb-6 flex-shrink-0">
                         <h2 className="text-xl font-bold tracking-wider mb-4">Acct Manager</h2>
                         <p className="text-red-400 font-bold mb-4">あなたのアカウントはuser_masterに存在しません</p>
                         {authenticatedEmail && (
                             <p className="text-gray-400 text-sm mt-2">認証済みメール: {authenticatedEmail}</p>
                         )}
                     </div>
-                    <div className="mt-auto">
+                    <div className="mt-auto flex-shrink-0">
                         <button
                             onClick={async () => {
                                 await fetch('/api/auth/logout', { method: 'POST' });
@@ -93,14 +93,14 @@ export default function Sidebar({ user, hasApprovals, isAuthenticatedButNotInMas
                         onClick={handleToggle}
                     />
                 )}
-                <aside className={`fixed left-0 top-0 w-64 bg-slate-800 text-white p-6 flex flex-col shadow-xl border-r border-gray-700 z-50 h-screen transform transition-transform duration-300 ease-in-out ${
+                <aside className={`fixed left-0 top-0 w-64 bg-slate-800 text-white p-6 flex flex-col shadow-xl border-r border-gray-700 z-50 min-h-screen max-h-screen overflow-y-auto transform transition-transform duration-300 ease-in-out ${
                     isOpen ? 'translate-x-0' : '-translate-x-full'
                 } md:translate-x-0`}>
-                    <div className="mb-6">
+                    <div className="mb-6 flex-shrink-0">
                         <h2 className="text-xl font-bold tracking-wider mb-4">Acct Manager</h2>
                         <p className="text-red-400 font-bold mb-4">ログインしていません</p>
                     </div>
-                    <div className="mt-auto">
+                    <div className="mt-auto flex-shrink-0">
                         <button
                             onClick={() => {
                                 window.location.href = '/login';
@@ -124,10 +124,10 @@ export default function Sidebar({ user, hasApprovals, isAuthenticatedButNotInMas
                     onClick={handleToggle}
                 />
             )}
-            <aside className={`fixed left-0 top-0 w-64 bg-slate-800 text-white h-screen flex flex-col shadow-xl border-r border-gray-700 z-50 transform transition-transform duration-300 ease-in-out ${
+            <aside className={`fixed left-0 top-0 w-64 bg-slate-800 text-white min-h-screen max-h-screen flex flex-col shadow-xl border-r border-gray-700 z-50 transform transition-transform duration-300 ease-in-out ${
                 isOpen ? 'translate-x-0' : '-translate-x-full'
             } md:translate-x-0`}>
-                <div className="p-6 border-b border-gray-700">
+                <div className="p-6 border-b border-gray-700 flex-shrink-0">
                     <h2 className="text-xl font-bold tracking-wider">Acct Manager</h2>
                     <div className="mt-4 text-sm text-gray-300">
                         <p className="font-medium">{user.last_name} {user.first_name}</p>
@@ -135,7 +135,7 @@ export default function Sidebar({ user, hasApprovals, isAuthenticatedButNotInMas
                     </div>
                 </div>
 
-                <nav className="flex-1 p-4 overflow-y-auto">
+                <nav className="flex-1 p-4 overflow-y-auto min-h-0">
                     <ul className="space-y-2">
                         {/* Admin Menu */}
                         {user.is_admin && !isUserViewMode && (
@@ -256,7 +256,7 @@ export default function Sidebar({ user, hasApprovals, isAuthenticatedButNotInMas
                     </ul>
                 </nav>
 
-                <div className="p-4 border-t border-gray-700">
+                <div className="p-4 border-t border-gray-700 flex-shrink-0">
                     <div className="text-xs text-gray-400 mb-3">
                         Internal System
                     </div>
