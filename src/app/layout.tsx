@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { redirect } from "next/navigation";
 import "./globals.css";
-import Sidebar from "@/components/Sidebar";
+import MobileLayout from "@/components/MobileLayout";
 import { getCurrentUser, getSessionEmail, UserProfileSerializable } from "@/lib/auth";
 import { hasApprovals } from "@/lib/db_utils";
 
@@ -46,18 +46,14 @@ export default async function RootLayout({
   return (
     <html lang="ja">
       <body className={`${inter.className} bg-gray-900 min-h-screen flex text-gray-100`}>
-        {/* Sidebar */}
-        <Sidebar 
-          user={serializedUser} 
-          hasApprovals={userHasApprovals} 
-          isAuthenticatedButNotInMaster={isAuthenticatedButNotInMaster} 
-          authenticatedEmail={email || undefined} 
-        />
-
-        {/* Main Content */}
-        <main className="flex-1 overflow-y-auto bg-gray-900 ml-64">
+        <MobileLayout
+          user={serializedUser}
+          hasApprovals={userHasApprovals}
+          isAuthenticatedButNotInMaster={isAuthenticatedButNotInMaster}
+          authenticatedEmail={email || undefined}
+        >
           {children}
-        </main>
+        </MobileLayout>
       </body>
     </html>
   );
